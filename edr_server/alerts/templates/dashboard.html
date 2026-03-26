@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block page_title %}
+Dashboard
+{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+  <div class="col-lg-3 col-6">
+    <div class="small-box bg-danger shadow-sm border-0 clickable-box" onclick="location.href='/alerts/?severity=High'">
+      <div class="inner p-3">
+        <h3 id="criticalAlerts" class="fw-bold fs-2 mb-1">0</h3>
+        <p class="mb-0 fs-6">Critical Alerts</p>
+      </div>
+      <div class="icon opacity-50 pe-3 pt-3">
+        <i class="fas fa-exclamation-triangle fa-3x"></i>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-6">
+    <div class="small-box bg-warning shadow-sm border-0 text-dark clickable-box" onclick="location.href='/alerts/?severity=Medium'">
+      <div class="inner p-3">
+        <h3 id="mediumAlerts" class="fw-bold fs-2 mb-1">0</h3>
+        <p class="mb-0 fs-6">Medium Alerts</p>
+      </div>
+      <div class="icon opacity-50 pe-3 pt-3">
+        <i class="fas fa-exclamation-circle fa-3x"></i>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-6">
+    <div class="small-box bg-success shadow-sm border-0 text-white clickable-box" onclick="location.href='/alerts/?severity=Low'">
+      <div class="inner p-3">
+        <h3 id="lowAlerts" class="fw-bold fs-2 mb-1">0</h3>
+        <p class="mb-0 fs-6">Low Severity</p>
+      </div>
+      <div class="icon opacity-50 pe-3 pt-3">
+        <i class="fas fa-info-circle fa-3x text-white"></i>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-6">
+    <div class="small-box bg-info shadow-sm border-0 text-white clickable-box" onclick="location.href='/alerts/'">
+      <div class="inner p-3">
+        <h3 id="totalAlerts" class="fw-bold fs-2 mb-1">0</h3>
+        <p class="mb-0 fs-6">Total Alerts</p>
+      </div>
+      <div class="icon opacity-50 pe-3 pt-3">
+        <i class="fas fa-bell fa-3x text-white"></i>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-3 col-6">
+    <div class="small-box bg-dark shadow-sm border-0 text-white clickable-box" onclick="location.href='/machines/'" style="background: linear-gradient(135deg, #212529 0%, #343a40 100%) !important;">
+      <div class="inner p-3">
+        <h3 id="machines" class="fw-bold fs-2 mb-1">0</h3>
+        <p class="mb-0 fs-6 text-white text-opacity-75">Active Machines</p>
+      </div>
+      <div class="icon opacity-25 pe-3 pt-3">
+        <i class="fas fa-desktop fa-3x text-white"></i>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-12">
+    <div class="card card-outline card-primary shadow-sm border-0">
+      <div class="card-header border-bottom-0">
+        <h3 class="card-title fw-bold">
+          <i class="fas fa-chart-bar me-2 text-primary"></i>
+          Alert Activity Overview
+        </h3>
+      </div>
+      <div class="card-body">
+        <div style="min-height: 350px;">
+          <canvas id="alertChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .small-box { position: relative; border-radius: 12px; overflow: hidden; transition: transform 0.2s ease; }
+  .small-box:hover { transform: translateY(-3px); }
+  .small-box .icon { position: absolute; right: 0; top: 0; transition: transform 0.3s ease; }
+  .small-box:hover .icon { transform: scale(1.1); }
+  .clickable-box { cursor: pointer; }
+  .bg-warning.text-dark .icon i { color: #333 !important; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+
+<script>
+  let alertChart = null;
+
+  async function loadDashboard() {
+    try {
+      const res = await fetch("/api/dashboard/");
+      if (!res.ok) throw new Error("API request failed");
+      const data = await res.json();
+
+      document.getElementById("totalAlerts").innerText = data.total_alerts || 0;
+      document.getElementById("criticalAlerts").innerText = data.high_alerts || 0;
+      document.getElementById("mediumAlerts").innerText = data.medium_alerts || 0;
+      document.getElementById("lowAlerts").innerText = data.low_alerts || 0;
+      document.getElementById("machines").innerText = data.total_machines || 0;
+
+      const canvas = document.getElementById("alertChart");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+
+      if (alertChart) {
+        alertChart.destroy();
+      }
+
+      alertChart = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels: ["High Severity", "Medium Severity", "Low Severity"],
+          datasets: [{
+            label: "Detection Volume",
+            data: [
+              data.high_alerts || 0,
+              data.medium_alerts || 0,
+              data.low_alerts || 0
+            ],
+            backgroundColor: ["#dc3545", "#ffc107", "#198754"],
+            borderRadius: 8,
+            barThickness: 60
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: { precision: 0 }
+            }
+          }
+        }
+      });
+    } catch (error) {
+      console.error("Dashboard update failed:", error);
+    }
+  }
+
+  $(document).ready(function() {
+    loadDashboard();
+    setInterval(loadDashboard, 30000);
+  });
+</script>
+{% endblock %}

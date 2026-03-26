@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block page_title %}
+Alert Investigation
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-md-8">
+    <div class="card card-outline card-primary shadow-sm border-0">
+      <div class="card-header bg-white">
+        <h3 class="card-title fw-bold">
+          <i class="fas fa-search me-2 text-primary"></i>
+          Alert Investigation #{{ alert.id }}
+        </h3>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-striped align-middle mb-0">
+          <tbody>
+            <tr>
+              <th class="ps-4" style="width: 200px;">Assigned Machine</th>
+              <td>
+                <i class="fas fa-desktop text-muted me-2 small"></i>
+                <strong class="text-dark">{{ alert.machine.hostname }}</strong>
+              </td>
+            </tr>
+            <tr>
+              <th class="ps-4">IP Address</th>
+              <td><code class="text-primary">{{ alert.machine.ip_address }}</code></td>
+            </tr>
+            <tr>
+              <th class="ps-4">Alert Classification</th>
+              <td><span class="text-primary fw-bold">{{ alert.alert_type }}</span></td>
+            </tr>
+            <tr>
+              <th class="ps-4">Impact Severity</th>
+              <td>
+                {% if alert.severity == "High" %}
+                <span class="badge bg-danger px-3">{{ alert.severity }}</span>
+                {% elif alert.severity == "Medium" %}
+                <span class="badge bg-warning text-dark px-3">{{ alert.severity }}</span>
+                {% else %}
+                <span class="badge bg-success px-3">{{ alert.severity }}</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <th class="ps-4">Detailed Description</th>
+              <td class="pe-4">
+                <div class="p-3 bg-light rounded border-start border-4 border-primary">
+                  {{ alert.description|default:"No additional forensic data provided for this detection." }}
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <th class="ps-4">Timestamp</th>
+              <td class="text-muted small">{{ alert.created_at|date:"F j, Y, g:i a" }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer bg-white border-top-0 py-3 ps-4">
+        <a href="/alerts/" class="btn btn-outline-secondary px-4">
+          <i class="fas fa-chevron-left me-1"></i> Return to Stream
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card card-outline card-info shadow-sm border-0">
+      <div class="card-header bg-white">
+        <h3 class="card-title fw-bold text-info"><i class="fas fa-microchip me-2"></i> Asset Context</h3>
+      </div>
+      <div class="card-body">
+        <div class="d-flex align-items-center mb-3">
+          <div class="bg-info bg-opacity-10 p-3 rounded me-3 text-info">
+            <i class="fas fa-server fa-2x"></i>
+          </div>
+          <div>
+            <h6 class="mb-0 fw-bold">{{ alert.machine.hostname }}</h6>
+            <span class="text-muted small">{{ alert.machine.ip_address }}</span>
+          </div>
+        </div>
+        
+        <ul class="list-group list-group-flush small">
+          <li class="list-group-item d-flex justify-content-between px-0">
+            <span>Security Status:</span>
+            <span class="badge bg-success">Active Protection</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between px-0">
+            <span>Last Heartbeat:</span>
+            <span class="text-muted">{{ alert.machine.last_seen|timesince }} ago</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Active Response Section -->
+    <div class="card card-outline card-danger shadow-sm border-0 mt-4">
+      <div class="card-header bg-white">
+        <h3 class="card-title fw-bold text-danger"><i class="fas fa-bolt me-2"></i> Active Response</h3>
+      </div>
+      <div class="card-body">
+          <div class="card-body d-flex flex-wrap gap-2">
+            {% if user.profile.role == 'admin' or user.profile.role == 'analyst' %}
+            <button class="btn btn-outline-danger flex-grow-1" onclick="executeTask('kill_process')">
+              <i class="fas fa-skull me-1"></i> Kill Process
+            </button>
+            {% endif %}
+
+            {% if user.profile.role == 'admin' %}
+            <button class="btn btn-outline-warning flex-grow-1" onclick="executeTask('isolate_network')">
+              <i class="fas fa-network-wired me-1"></i> Isolate Machine
+            </button>
+            <button class="btn btn-outline-success flex-grow-1" onclick="executeTask('rejoin_network')">
+              <i class="fas fa-plug me-1"></i> Rejoin Network
+            </button>
+            <button class="btn btn-outline-secondary flex-grow-1" onclick="executeTask('execute_script')">
+              <i class="fas fa-terminal me-1"></i> Run Script
+            </button>
+            {% endif %}
+
+            {% if user.profile.role == 'viewer' %}
+            <div class="text-muted small w-100 text-center py-2 bg-light rounded border border-info">
+                <i class="fas fa-info-circle me-1 text-info"></i> Account Role: Guest (Read-only)
+            </div>
+            {% endif %}
+          </div>
+        <p class="text-muted small mt-2 mb-0">
+          <i class="fas fa-info-circle me-1"></i> Actions are queued and executed on next heartbeat.
+        </p>
+      </div>
+    </div>
+
+    <div class="alert alert-light border shadow-sm mt-3">
+      <h6 class="fw-bold"><i class="fas fa-lightbulb text-warning me-2"></i> Recommended Action</h6>
+      <p class="small mb-0 text-muted">
+        {% if alert.severity == "High" %}
+        Isolate this machine immediately and review the associated process tree.
+        {% else %}
+        Monitor for subsequent activity or additional forensic markers.
+        {% endif %}
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white">
+        <h3 class="card-title fw-bold"><i class="fas fa-history me-2"></i> Recent Response Tasks</h3>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0" id="taskTable">
+            <thead class="bg-light">
+              <tr>
+                <th class="ps-3">Type</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Task history -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const hostname = "{{ alert.machine.hostname }}";
+  const alertDesc = "{{ alert.description|escapejs }}";
+  
+  // Try to extract PID from description
+  let discoveredPid = null;
+  const pidMatch = alertDesc.match(/PID (\d+)/);
+  if (pidMatch) {
+    discoveredPid = pidMatch[1];
+  }
+
+  async function executeTask(type) {
+    let params = {};
+    if (type === 'kill_process') {
+      const { value: pidStr } = await Swal.fire({
+          title: 'Kill Process',
+          input: 'text',
+          inputLabel: 'Enter PID to kill',
+          inputValue: discoveredPid || "",
+          showCancelButton: true
+      });
+      if (!pidStr) return;
+      params = { "pid": parseInt(pidStr) };
+    }
+
+    const confirmResult = await Swal.fire({
+        title: 'Confirm Action',
+        text: `Are you sure you want to trigger "${type}" on ${hostname}?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, execute!'
+    });
+
+    if (!confirmResult.isConfirmed) return;
+
+    try {
+      const res = await fetch("/api/tasks/create/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": "{{ csrf_token }}"
+        },
+        body: JSON.stringify({
+          hostname: hostname,
+          task_type: type,
+          parameters: params
+        })
+      });
+      
+      const data = await res.json();
+      if (res.status === 201) {
+        Toast.fire({
+          icon: 'success',
+          title: 'Task Queued'
+        });
+        loadTasks();
+      } else {
+        Swal.fire('Error', (data.error || "Unknown error"), 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      Swal.fire('Error', 'Failed to queue task', 'error');
+    }
+  }
+
+  async function loadTasks() {
+    try {
+      const res = await fetch(`/api/tasks/?hostname=${hostname}`);
+      const tasks = await res.json();
+      const tbody = document.querySelector("#taskTable tbody");
+      if (!tbody) return;
+      
+      tbody.innerHTML = "";
+      
+      if (tasks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted">No response tasks recorded for this asset.</td></tr>';
+        return;
+      }
+
+      tasks.slice(0, 10).forEach(t => {
+        let badge = "bg-secondary";
+        if (t.status === "completed") badge = "bg-success";
+        if (t.status === "failed") badge = "bg-danger";
+        if (t.status === "pending") badge = "bg-info";
+        if (t.status === "sent") badge = "bg-warning text-dark";
+
+        const time = new Date(t.created_at).toLocaleString();
+        tbody.innerHTML += `
+          <tr>
+            <td class="ps-3 text-uppercase small fw-bold"><code>${t.task_type}</code></td>
+            <td><span class="badge ${badge}">${t.status}</span></td>
+            <td>${time}</td>
+            <td class="small text-muted">${t.result || '-'}</td>
+          </tr>
+        `;
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  $(document).ready(function() {
+    loadTasks();
+    setInterval(loadTasks, 10000);
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block page_title %}
+Alerts
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="card card-outline card-primary shadow-sm border-0">
+      <div class="card-header border-bottom-0">
+        <h3 class="card-title fw-bold">
+          <i class="fas fa-list me-2 text-primary"></i>
+          Recent Alerts Stream
+        </h3>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table id="alertsTable" class="table table-hover table-striped mb-0 align-middle">
+            <thead class="bg-light">
+              <tr>
+                <th class="ps-3">Time</th>
+                <th>Machine</th>
+                <th>Alert Type</th>
+                <th>Severity</th>
+                <th style="width: 120px;" class="text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- DataTables will populate this -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .dataTables_wrapper .dataTables_filter { padding: 1rem; }
+  .dataTables_wrapper .dataTables_info { padding: 1rem; }
+  .dataTables_wrapper .dataTables_paginate { padding: 1rem; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  let alertsTableInstance;
+
+  async function loadAlerts() {
+    try {
+      const response = await fetch("/api/alerts/");
+      if (!response.ok) throw new Error("API failed");
+      const alerts = await response.json();
+      
+      if (!alertsTableInstance) return;
+      alertsTableInstance.clear();
+
+      alerts.forEach(alert => {
+        let badgeClass = "bg-secondary";
+        if (alert.severity === "High") badgeClass = "bg-danger";
+        if (alert.severity === "Medium") badgeClass = "bg-warning text-dark";
+        if (alert.severity === "Low") badgeClass = "bg-success";
+
+        const time = new Date(alert.created_at).toLocaleString();
+        const rawTime = new Date(alert.created_at).getTime();
+        const hostname = alert.machine ? `<i class="fas fa-desktop text-muted me-1 small"></i> <strong>${alert.machine.hostname}</strong>` : 'Unknown';
+
+        alertsTableInstance.row.add([
+          { "display": `<span class="ps-2 text-muted small">${time}</span>`, "timestamp": rawTime },
+          hostname,
+          `<span class="text-primary">${alert.alert_type}</span>`,
+          `<span class="badge ${badgeClass}">${alert.severity}</span>`,
+          `<div class="text-center">
+            <a href="/alerts/${alert.id}/" class="btn btn-sm btn-outline-primary shadow-sm px-3 border-0">
+              <i class="fas fa-eye me-1"></i> View
+            </a>
+          </div>`
+        ]);
+      });
+
+      alertsTableInstance.draw();
+    } catch (error) {
+      console.error("Failed to load alerts:", error);
+    }
+  }
+
+  $(document).ready(function() {
+    alertsTableInstance = $('#alertsTable').DataTable({
+      "responsive": true,
+      "autoWidth": false,
+      "order": [[0, "desc"]],
+      "pageLength": 15,
+      "columnDefs": [
+        { "targets": 0, "type": "num", "render": { "_": "display", "sort": "timestamp" } }
+      ],
+      "language": {
+        "search": "_INPUT_",
+        "searchPlaceholder": "Search alerts..."
+      }
+    });
+
+    // Handle URL search parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const severityFilter = urlParams.get('severity');
+    if (severityFilter) {
+      alertsTableInstance.search(severityFilter).draw();
+    }
+
+    loadAlerts();
+    setInterval(loadAlerts, 30000);
+  });
+</script>
+{% endblock %}

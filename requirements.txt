@@ -1,0 +1,7 @@
+Django>=4.2
+asgiref>=3.7
+sqlparse>=0.4
+djangorestframework>=3.14
+psutil>=5.9.0
+requests>=2.31.0
+pywin32>306; sys_platform == 'win32'

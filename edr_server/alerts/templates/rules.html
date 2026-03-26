@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+
+{% block page_title %}
+Detection Rules
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <div id="notification" style="display:none; position: fixed; top: 20px; right: 20px; z-index: 9999;" class="alert alert-success shadow-lg border-0"></div>
+
+    <div class="card card-outline card-primary shadow-sm border-0">
+      <div class="card-header border-bottom-0">
+        <h3 class="card-title fw-bold">
+          <i class="fas fa-shield-alt me-1 text-primary"></i>
+          Active Detection Rules
+        </h3>
+        {% if user.profile.role == 'admin' %}
+        <div class="card-tools float-end">
+          <button class="btn btn-primary btn-sm" onclick="openRuleForm()">
+            <i class="fas fa-plus me-1"></i> Add New Rule
+          </button>
+        </div>
+        {% endif %}
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table id="rulesTableMain" class="table table-hover table-striped mb-0 align-middle">
+            <thead class="bg-light">
+              <tr>
+                <th class="ps-3">ID</th>
+                <th>Rule Type</th>
+                <th>Value</th>
+                <th>Severity</th>
+                <th>Created At</th>
+                <th style="width: 100px;" class="text-center">Status</th>
+                {% if user.profile.role == 'admin' %}
+                <th style="width: 180px;" class="text-center">Actions</th>
+                {% endif %}
+              </tr>
+            </thead>
+            <tbody id="rulesTable">
+              <!-- JS will populate -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal for Rule Form -->
+<div class="modal fade" id="ruleModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="ruleModalTitle">Add/Edit Rule</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="rule_id">
+        
+        <div class="mb-3">
+          <label class="form-label fw-bold">Rule Type</label>
+          <select id="rule_type" class="form-select">
+            <option value="" disabled selected>Select Rule Type</option>
+            <option value="process">Process Name</option>
+            <option value="cpu">CPU Threshold</option>
+            <option value="network">Suspicious IP/Host</option>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-bold">Value</label>
+          <input id="value" placeholder="ex: mimikatz.exe or 90" class="form-control">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-bold">Severity</label>
+          <select id="severity" class="form-select">
+            <option value="" disabled selected>Select Severity</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer bg-light">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button id="saveBtn" class="btn btn-success" onclick="saveRule()">Save Rule</button>
+        <button id="updateBtn" class="btn btn-warning" onclick="updateRule()" style="display:none;">Update Rule</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  let ruleModal;
+
+  function showNotification(message) {
+    const note = document.getElementById("notification");
+    note.innerHTML = `<i class="fas fa-check-circle me-1"></i> ${message}`;
+    $(note).fadeIn();
+    setTimeout(() => { $(note).fadeOut(); }, 3000);
+  }
+
+  function openRuleForm() {
+    document.getElementById("rule_id").value = "";
+    document.getElementById("value").value = "";
+    document.getElementById("rule_type").selectedIndex = 0;
+    document.getElementById("severity").selectedIndex = 0;
+    
+    document.getElementById("ruleModalTitle").innerText = "Add Detection Rule";
+    document.getElementById("saveBtn").style.display = "inline-block";
+    document.getElementById("updateBtn").style.display = "none";
+    ruleModal.show();
+  }
+
+  async function saveRule() {
+    const rule = {
+      rule_type: document.getElementById("rule_type").value,
+      value: document.getElementById("value").value,
+      severity: document.getElementById("severity").value
+    };
+
+    const res = await fetch("/api/rules/create/", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "X-CSRFToken": "{{ csrf_token }}"
+      },
+      body: JSON.stringify(rule)
+    });
+
+    if (res.ok) {
+      showNotification("Rule added successfully");
+      ruleModal.hide();
+      loadRules();
+    } else {
+      alert("Failed to add rule");
+    }
+  }
+
+  function editRule(id, rule_type, value, severity) {
+    document.getElementById("rule_id").value = id;
+    document.getElementById("rule_type").value = rule_type;
+    document.getElementById("value").value = value;
+    document.getElementById("severity").value = severity;
+
+    document.getElementById("ruleModalTitle").innerText = "Update Detection Rule";
+    document.getElementById("saveBtn").style.display = "none";
+    document.getElementById("updateBtn").style.display = "inline-block";
+    ruleModal.show();
+  }
+
+  async function updateRule() {
+    const id = document.getElementById("rule_id").value;
+    const rule = {
+      rule_type: document.getElementById("rule_type").value,
+      value: document.getElementById("value").value,
+      severity: document.getElementById("severity").value
+    };
+
+    const res = await fetch(`/api/rules/${id}/update/`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(rule)
+    });
+
+    if (res.ok) {
+      showNotification("Rule updated successfully");
+      ruleModal.hide();
+      loadRules();
+    } else {
+      alert("Update failed");
+    }
+  }
+
+  async function deleteRule(id) {
+    const confirm = await Swal.fire({
+      title: 'Delete Rule?',
+      text: 'This will stop this detection.',
+      icon: 'warning',
+      showCancelButton: true
+    });
+
+    if (confirm.isConfirmed) {
+      const res = await fetch(`/api/rules/${id}/delete/`, { 
+        method: "DELETE",
+        headers: { "X-CSRFToken": "{{ csrf_token }}" }
+      });
+      if (res.ok) {
+        showNotification("Rule deleted");
+        loadRules();
+      } else {
+        const data = await res.json();
+        Swal.fire('Error', data.error || 'Delete failed', 'error');
+      }
+    }
+  }
+
+  async function toggleRule(id, currentState) {
+    const res = await fetch(`/api/rules/${id}/update/`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: !currentState })
+    });
+
+    if (res.ok) {
+      showNotification(`Rule ${!currentState ? 'enabled' : 'disabled'}`);
+      loadRules();
+    }
+  }
+
+  async function loadRules() {
+    try {
+      const res = await fetch("/api/rules/");
+      if (!res.ok) throw new Error("API failed");
+      const rules = await res.json();
+      const tableBody = document.getElementById("rulesTable");
+      if (!tableBody) return;
+      tableBody.innerHTML = "";
+
+      rules.forEach(rule => {
+        let ruleDisplay = "Unknown";
+        if (rule.rule_type === "process") ruleDisplay = "Process Name";
+        else if (rule.rule_type === "cpu") ruleDisplay = "CPU Threshold";
+        else if (rule.rule_type === "network") ruleDisplay = "Suspicious IP/Host";
+
+        let statusBadge = rule.enabled ? 
+          '<span class="badge bg-success">Enabled</span>' : 
+          '<span class="badge bg-secondary">Disabled</span>';
+        
+        const userRole = "{{ user.profile.role }}";
+        let actionCol = "";
+        if (userRole === "admin") {
+          const toggleIcon = rule.enabled ? "fa-toggle-on text-success" : "fa-toggle-off text-muted";
+          actionCol = `
+            <div class="btn-group">
+                <button class="btn btn-sm btn-outline-secondary border-0" onclick="toggleRule(${rule.id}, ${rule.enabled})" title="Toggle Status">
+                  <i class="fas ${toggleIcon} fs-5"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-warning border-0" onclick="editRule(${rule.id}, '${rule.rule_type}', '${rule.value}', '${rule.severity}')" title="Edit">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteRule(${rule.id})" title="Delete">
+                  <i class="fas fa-trash"></i>
+                </button>
+            </div>
+          `;
+        }
+
+        tableBody.innerHTML += `
+          <tr>
+            <td class="ps-3">${rule.id}</td>
+            <td>${ruleDisplay}</td>
+            <td><code class="text-primary">${rule.value}</code></td>
+            <td>${rule.severity}</td>
+            <td class="small text-muted">${new Date(rule.created_at).toLocaleString()}</td>
+            <td class="text-center">${statusBadge}</td>
+            ${userRole === "admin" ? `<td class="text-center">${actionCol}</td>` : ""}
+          </tr>
+        `;
+      });
+    } catch (e) { console.error(e); }
+  }
+
+  $(document).ready(function() {
+    const modalEl = document.getElementById('ruleModal');
+    if (modalEl) {
+      ruleModal = new bootstrap.Modal(modalEl);
+    }
+    loadRules();
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block page_title %}User Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0"><i class="fas fa-user-plus me-2"></i> Create New User</h5>
+            </div>
+            <div class="card-body">
+                <form id="createUserForm">
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-control" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-control" name="password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">System Role</label>
+                        <select class="form-select" name="role" required>
+                            <option value="admin">Administrator (Full Control)</option>
+                            <option value="analyst">Security Analyst (Response Only)</option>
+                            <option value="viewer" selected>Guest Viewer (Read-only)</option>
+                        </select>
+                        <div class="form-text small mt-1">
+                            Analysts can kill processes but cannot isolate machines.
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-save me-1"></i> Create Account
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white">
+                <h5 class="card-title mb-0"><i class="fas fa-users me-2"></i> System Operators</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover align-middle mb-0" id="usersTable">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="ps-3">Username</th>
+                            <th>Role</th>
+                            <th>Last Login</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="userListBody">
+                        <!-- Loaded via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    loadUsers();
+
+    document.getElementById("createUserForm").onsubmit = async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+
+        try {
+            const res = await fetch("/api/users/", {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token }}"
+                },
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            if (res.ok) {
+                Toast.fire({ icon: 'success', title: result.message });
+                e.target.reset();
+                loadUsers();
+            } else {
+                Swal.fire('Error', result.error, 'error');
+            }
+        } catch (err) {
+            Swal.fire('Error', 'Failed to reach server', 'error');
+        }
+    };
+});
+
+async function loadUsers() {
+    const res = await fetch("/api/users/");
+    const users = await res.json();
+    const tbody = document.getElementById("userListBody");
+    tbody.innerHTML = "";
+
+    users.forEach(u => {
+        let roleBadge = "bg-secondary";
+        if (u.role === 'admin') roleBadge = "bg-danger";
+        if (u.role === 'analyst') roleBadge = "bg-warning text-dark";
+        
+        const lastLogin = u.last_login ? new Date(u.last_login).toLocaleString() : "Never";
+        
+        tbody.innerHTML += `
+            <tr>
+                <td class="ps-3 font-weight-bold">${u.username}</td>
+                <td><span class="badge ${roleBadge}">${u.role.toUpperCase()}</span></td>
+                <td class="small text-muted">${lastLogin}</td>
+                <td class="text-center">
+                    <div class="btn-group shadow-sm">
+                        <button class="btn btn-sm btn-outline-warning" onclick="resetPassword(${u.id}, '${u.username}')" title="Reset Password">
+                            <i class="fas fa-key"></i>
+                        </button>
+                        ${u.username === '{{ user.username }}' ? 
+                            '' : 
+                            `<button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${u.id})" title="Delete Account">
+                                <i class="fas fa-trash"></i>
+                            </button>`
+                        }
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+async function resetPassword(id, username) {
+    const { value: password } = await Swal.fire({
+        title: `Reset Credentials`,
+        text: `Enter a new password for ${username}`,
+        input: 'password',
+        inputPlaceholder: 'Choose a secure password',
+        showCancelButton: true,
+        confirmButtonColor: '#ffc107',
+        confirmButtonText: 'Update Password',
+        inputAttributes: {
+            'minlength': 4,
+            'autocapitalize': 'off',
+            'autocorrect': 'off'
+        }
+    });
+
+    if (password) {
+        try {
+            const res = await fetch(`/api/users/${id}/reset-password/`, {
+                method: 'POST',
+                headers: { 
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token }}"
+                },
+                body: JSON.stringify({ password: password })
+            });
+            const result = await res.json();
+            if (res.ok) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Password Updated',
+                    text: result.message
+                });
+            } else {
+                Swal.fire('Failed', result.error, 'error');
+            }
+        } catch (err) {
+            Swal.fire('Error', 'Server communication failure', 'error');
+        }
+    }
+}
+
+async function deleteUser(id) {
+    const confirm = await Swal.fire({
+        title: 'Delete User?',
+        text: 'This action cannot be undone.',
+        icon: 'warning',
+        showCancelButton: true
+    });
+
+    if (confirm.isConfirmed) {
+        const res = await fetch(`/api/users/${id}/delete/`, {
+            method: 'DELETE',
+            headers: { "X-CSRFToken": "{{ csrf_token }}" }
+        });
+        if (res.ok) {
+            Toast.fire({ icon: 'success', title: 'User deleted' });
+            loadUsers();
+        } else {
+            const data = await res.json();
+            Swal.fire('Error', data.error, 'error');
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+edr_env/
+venv/
+ENV/
+
+# Django
+db.sqlite3
+local_settings.py
+staticfiles/
+media/
+
+# IDEs
+.vscode/
+.idea/
+
+# Agent specific
+agent/config.json
+agent/rules.json
+
+# Logs
+*.log
+
+# System
+.DS_Store
+*.swp
+hast.txt
+hash.txt
+.hash.txt.swp
